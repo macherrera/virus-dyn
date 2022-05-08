@@ -1,7 +1,11 @@
 # Problem Set 3: Simulating the Spread of Disease and Virus Population Dynamics 
 
 import random
-#import pylab
+import pylab
+import numpy as np
+from ps3b_precompiled_39 import *
+import os
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
 ''' 
 Begin helper code
@@ -83,8 +87,8 @@ class SimpleVirus(object):
         if random.random() < (self.getMaxBirthProb()*(1-popDensity)):
             return new_virus_particle
         else:
-            except NoChildException:
-                pass
+            raise NoChildException
+
 
 
 
@@ -154,7 +158,11 @@ class Patient(object):
         next_gen_virus = surviving_virus[:]
 
         for s_virus_particle in surviving_virus:
-            next_gen_virus.append(s_virus_particle.reproduce(new_pop_density))
+            try:
+                next_gen_virus.append(s_virus_particle.reproduce(new_pop_density))
+            except NoChildException:
+                pass
+
 
         self.viruses = next_gen_virus
 
@@ -162,15 +170,15 @@ class Patient(object):
 
 def test_virus(a,b):
     rona = SimpleVirus(a,b)
-    mac = Patient([rona], 100)
+    mac = Patient([rona], 10000000000000)
     print("viruses:", mac.getViruses())
-    for n in range(101):
+    for n in range(100):
         print(mac.update())
         #print("viruses:", mac.getViruses())
     print("FINAL:", mac.getTotalPop())
     #print(mac.viruses)
 
-test_virus(1.0,1.0)
+#test_virus(1.0,0.0)
 
 
 #
@@ -191,9 +199,39 @@ def simulationWithoutDrug(numViruses, maxPop, maxBirthProb, clearProb,
     clearProb: Maximum clearance probability (a float between 0-1)
     numTrials: number of simulation runs to execute (an integer)
     """
+    init_virus_pop = []
+    for virus in range(numViruses):
+        virus = SimpleVirus(maxBirthProb, clearProb)
+        init_virus_pop.append(virus)
+    virus_populations = []
 
-    # TODO
+    for trial in range(numTrials):
+        new_subject = Patient(init_virus_pop, maxPop)
+        new_virus_pop = [len(new_subject.getViruses())]
 
+        for n in range(299):
+            new_subject.update()
+            new_virus_pop.append(new_subject.getTotalPop())
+        #print("NEW PERSONS virus count:", new_virus_pop)
+        virus_populations.append(new_virus_pop)
+    #print(virus_populations)
+    virus_pops_avgs = np.divide(virus_populations, numTrials)
+    #print(virus_pops_avgs)
+
+    total_virus_avg = [0] * 300
+    #print(total_virus_avg)
+    for list in virus_pops_avgs:
+        total_virus_avg += list
+    x_val = [_ for _ in range(300)]
+
+    pylab.plot(x_val, total_virus_avg, label="SimpleVirus")
+    pylab.title("SimpleVirus simulation")
+    pylab.xlabel("Time Steps")
+    pylab.ylabel("Average Virus Population")
+    pylab.legend(loc="best")
+    pylab.show()
+
+#simulationWithoutDrug(100, 1000, 0.1, 0.05, 100)
 
 
 #
@@ -221,21 +259,21 @@ class ResistantVirus(SimpleVirus):
         mutProb: Mutation probability for this virus particle (a float). This is
         the probability of the offspring acquiring or losing resistance to a drug.
         """
-
-        # TODO
-
+        SimpleVirus.__init__(self, maxBirthProb, clearProb)
+        self.resistances = resistances
+        self.mutProb = mutProb
 
     def getResistances(self):
         """
         Returns the resistances for this virus.
         """
-        # TODO
+        return getattr(self, "resistances")
 
     def getMutProb(self):
         """
         Returns the mutation probability for this virus.
         """
-        # TODO
+        return getattr(self, "mutProb")
 
     def isResistantTo(self, drug):
         """
@@ -248,8 +286,9 @@ class ResistantVirus(SimpleVirus):
         returns: True if this virus instance is resistant to the drug, False
         otherwise.
         """
-        
-        # TODO
+        drug_dic = getattr(self, "resistances")
+        return drug_dic[drug]
+
 
 
     def reproduce(self, popDensity, activeDrugs):
@@ -296,10 +335,22 @@ class ResistantVirus(SimpleVirus):
         maxBirthProb and clearProb values as this virus. Raises a
         NoChildException if this virus particle does not reproduce.
         """
+        tot_resistant = True
+        for each_drug in activeDrugs:
+            if not self.isResistantTo(each_drug):
+                tot_resistant = False
+        if tot_resistant:
+            if self.maxBirthProb * (1 - popDensity):
+                child_active_drugs = []
+                virus_child = ResistantVirus(self.maxBirthProb, self.clearProb, self.resistances, self.mutProb)
+                for each_drug in activeDrugs:
+                    if random.random() > self.getMutProb():   #mutation occurs:
+                        child_active_drugs.append(each_drug)
 
-        # TODO
-
-            
+                setattr(self, "activeDrugs", child_active_drugs)
+                return virus_child
+        else:
+            raise NoChildException
 
 class TreatedPatient(Patient):
     """
